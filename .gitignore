@@ -1,0 +1,11 @@
+*.o
+*.out
+*.d
+*.dd
+*.log
+*.ii
+vgcore*
+*.bin
+.*.*
+*.*~
+*.swp
