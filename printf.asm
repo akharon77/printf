@@ -1,9 +1,10 @@
-format ELF
-entry start
+format ELF64
 
-section '.text'
+section '.text' executable
 
-start:
+public _start
+
+_start:
 
     ; call printf
 
@@ -25,7 +26,7 @@ printf:
 ; jmp table for %b, %c and %d
 ; ascii codes are 98d, 99d, 100d
 ; sub 98d = 0h, 1h, 2h
-jmp_table1 dq offset 
+; jmp_table1 dq offset 
 
 
 ; jmp table for %o, %s, %x
@@ -38,11 +39,12 @@ jmp_table1 dq offset
 
     mov rsi, [rbp]
     xor rcx, rcx
+    xor rax, rax
     
 .next:
-    cmp byte ptr [rsi], '%'
+    cmp byte [rsi], '%'
     je .format
-    cmp byte ptr [rsi], 0h
+    cmp byte [rsi], 0h
     je .end
     
     inc rcx
@@ -52,20 +54,21 @@ jmp_table1 dq offset
     inc rsi
     lodsb
 
-    cmp al, 'o'
+    cmp rax, 'o'
     jge .case_osx
 
-    cmp al, 'b'
+    cmp rax, 'b'
     jge .case_bcd
 
-    cmp al, '
+    cmp rax, '%'
 
 .case_percent:
     ; putc('%')
 
 .case_bcd:
-    sub al, 'b'
-    jmp [jmp_bcd_table + al * 8h]
+    sub rax, 'b'
+    lea rdi, [jmp_bcd_table + rax * 8h]
+    jmp qword [rdi]
 
 .case_b:
     
@@ -82,6 +85,14 @@ jmp_table1 dq offset
 .case_osx:
     sub al, 'o'
     jmp .next
+
+.case_o:
+
+.case_s:
+
+.case_x:
+
+.skip:
 
 .end:
     add rsp, BUFFER_SIZE
@@ -104,9 +115,10 @@ puts:
     pop rbp
 ;==========================================
 
-section '.data'
+section '.data' writeable
 
-str db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
+string db "%%", 0h
+; str db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
 
 align 8
 jmp_bcd_table:
@@ -116,9 +128,12 @@ jmp_bcd_table:
 
 jmp_osx_table:
     dq printf.case_o
-    dq printf.
-
-section '.bss'
+    dq 3h dup (printf.skip)
+    dq printf.case_s
+    dq 4h dup (printf.skip)
+    dq printf.case_x
+    
+section '.bss' writeable
 
 printBuffer rb BUFFER_SIZE
 
