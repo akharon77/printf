@@ -6,15 +6,9 @@ public _start
 
 _start:
 
-    ; push msg
-    ; push 101h
-    ; call nputs
-    ; call printf
-
     mov rax, 3Ch
     xor rdi, rdi
     syscall
-    
 
 BUFFER_SIZE equ 100h
 
@@ -109,12 +103,18 @@ printf:
 ;==========================================
 
 ;==========================================
+; DESTROY:
+;   RAX, RDX, RSI, RDI
+;==========================================
 flush:
-    push rbp
-    mov rbp, rsp
+    mov rax, 1h             ; syscall write
+    mov rdi, 1h             ; fd    = 1h (console output)
+    mov rsi, printBuffer    ; buf   = offset printBuffer
+    mov rdx, [bufferIndex]  ; count = bufferIndex
+    syscall
 
-    mov rsp, rbp
-    pop rbp
+    mov [bufferIndex], 0h
+    ret
 ;==========================================
 
 ;==========================================
@@ -125,21 +125,35 @@ nputs:
     push rbp
     mov rbp, rsp
 
+    cmp qword [rbp + 10h], BUFFER_SIZE
+    jae .over_buf
+
     mov rcx, BUFFER_SIZE
     sub rcx, [bufferIndex]
 
     cmp [rbp + 10h], rcx
-    jbe .to_buf
+    jbe .no_flush
+        call flush
+
+.no_flush:
+    cld
+    mov rsi, [rbp + 18h]
+    mov rdi, [bufferIndex]
+    add rdi, printBuffer
+    mov rcx, [rbp + 10h]
+    add [bufferIndex], rcx
+    rep movsb
+
+    jmp .end
     
+.over_buf:
     mov rax, 1h             ; syscall write
     mov rdi, 1h             ; fd    = 1h (console output)
-    mov rsi, [rbp + 18h]    ; buf   = arg ptr
-    mov rdx, [rbp + 10h]    ; count = arg len
+    mov rsi, [rbp + 18h]    ; buf   = arg_ptr
+    mov rdx, [rbp + 10h]    ; count = arg_len
     syscall
 
     jmp .end
-
-.to_buf:
 
 .end:
     mov rsp, rbp
@@ -151,12 +165,11 @@ section '.data' writeable
 
 bufferIndex  dq 0h
 formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
-msg db 101h dup ('c')
-
-; first case %%
-; ascii code is 37d
 
 align 8
+
+; special case %%
+; ascii code is 37d
 
 ; jmp table for %b, %c and %d
 ; ascii codes are 98d, 99d, 100d
@@ -164,20 +177,20 @@ align 8
 ; jmp_table1 dq offset 
 
 jmp_bcd_table:
-    dq printf.case_b            ; 0h
-    dq printf.case_c            ; 1h
-    dq printf.case_d            ; 2h
+    dq printf.case_b            ; == 0h ==
+    dq printf.case_c            ; == 1h ==
+    dq printf.case_d            ; == 2h ==
 
 ; jmp table for %o, %s, %x
 ; ascii codes are 111d, 115d, 120d
 ; sub 111d = 0h, 4h, 9h
 
 jmp_osx_table:
-    dq printf.case_o            ; 0h
+    dq printf.case_o            ; == 0h ==
     dq 3h dup (printf.next)     ; 1h-3h
-    dq printf.case_s            ; 4h
+    dq printf.case_s            ; == 4h ==
     dq 4h dup (printf.next)     ; 5h-8h
-    dq printf.case_x            ; 9h
+    dq printf.case_x            ; == 9h ==
     
 section '.bss' writeable
 
