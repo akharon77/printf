@@ -6,6 +6,9 @@ public _start
 
 _start:
 
+    ; push msg
+    ; push 101h
+    ; call nputs
     ; call printf
 
     mov rax, 3Ch
@@ -20,83 +23,89 @@ printf:
     push rbp
     mov rbp, rsp
 
-; first case %%
-; ascii code is 37d
-
-; jmp table for %b, %c and %d
-; ascii codes are 98d, 99d, 100d
-; sub 98d = 0h, 1h, 2h
-; jmp_table1 dq offset 
-
-
-; jmp table for %o, %s, %x
-; ascii codes are 111d, 115d, 120d
-; sub 111d = 0h, 4h, 9h
-
-
-    sub rsp, BUFFER_SIZE    ; buffer allocation
-    mov r10, rsp            ; save buffer address
-
-    mov rsi, [rbp]
-    xor rcx, rcx
-    xor rax, rax
+    mov rsi, [rbp]          ; RSI is used for format string address
+    xor rcx, rcx            ; RCS is used to accumulate the part of string to print without formatting
+    xor rax, rax            ; RAX is used for symbol loading
     
 .next:
     cmp byte [rsi], '%'
     je .format
+
     cmp byte [rsi], 0h
     je .end
-    
-    inc rcx
+                            ;   If not EOS (end-of-string for future) and not format beginning
+    inc rcx                 ; increase the length of string's part
+    inc rsi             
     jmp .next
 
-.format:
+.format:                    ; |beg|   |   |   |RSI| => RSI - beg + 1 = RCX => beg = RSI - RCX + 1
     inc rsi
-    lodsb
+    mov rax, rsi
+    sub rax, rcx
+    
+    push rax
+    push rcx
+    call nputs              ; (ptr = rax, len = rcx)
 
-    cmp rax, 'o'
+    mov al, [rsi]
+
+    cmp al, 'o'
     jge .case_osx
 
-    cmp rax, 'b'
+    cmp al, 'b'
     jge .case_bcd
 
-    cmp rax, '%'
+    cmp al, '%'
+    je .case_percent
+    
+    jmp .next
 
 .case_percent:
     ; putc('%')
+    jmp .next
 
 .case_bcd:
     sub rax, 'b'
-    lea rdi, [jmp_bcd_table + rax * 8h]
-    jmp qword [rdi]
+    jmp qword [jmp_bcd_table + rax * 8h]
 
-.case_b:
-    
-    jmp .next
+;==========================================
+    .case_b:
+        
+        jmp .next
 
-.case_c:
+    .case_c:
 
-    jmp .next
+        jmp .next
 
-.case_d:
-    
-    jmp .next
+    .case_d:
+        
+        jmp .next
+;==========================================
 
 .case_osx:
-    sub al, 'o'
-    jmp .next
+    sub rax, 'o'
+    jmp qword [jmp_osx_table + rax * 8h]
 
-.case_o:
+;==========================================
+    .case_o:
 
-.case_s:
+        jmp .next
 
-.case_x:
+    .case_s:
 
-.skip:
+        jmp .next
+
+    .case_x:
+
+        jmp .next
+;==========================================
 
 .end:
-    add rsp, BUFFER_SIZE
+    ; call flush
+
+    mov rsp, rbp
     pop rbp
+    ret
 ;==========================================
 
 ;==========================================
@@ -104,34 +113,71 @@ flush:
     push rbp
     mov rbp, rsp
 
+    mov rsp, rbp
     pop rbp
 ;==========================================
 
 ;==========================================
-puts:
+; len = qword [rbp + 10h]
+; ptr = qword [rbp + 18h]
+;==========================================
+nputs:
     push rbp
     mov rbp, rsp
 
+    mov rcx, BUFFER_SIZE
+    sub rcx, [bufferIndex]
+
+    cmp [rbp + 10h], rcx
+    jbe .to_buf
+    
+    mov rax, 1h             ; syscall write
+    mov rdi, 1h             ; fd    = 1h (console output)
+    mov rsi, [rbp + 18h]    ; buf   = arg ptr
+    mov rdx, [rbp + 10h]    ; count = arg len
+    syscall
+
+    jmp .end
+
+.to_buf:
+
+.end:
+    mov rsp, rbp
     pop rbp
+    ret
 ;==========================================
 
 section '.data' writeable
 
-string db "%%", 0h
-; str db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
+bufferIndex  dq 0h
+formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
+msg db 101h dup ('c')
+
+; first case %%
+; ascii code is 37d
 
 align 8
+
+; jmp table for %b, %c and %d
+; ascii codes are 98d, 99d, 100d
+; sub 98d = 0h, 1h, 2h
+; jmp_table1 dq offset 
+
 jmp_bcd_table:
-    dq printf.case_b
-    dq printf.case_c
-    dq printf.case_d
+    dq printf.case_b            ; 0h
+    dq printf.case_c            ; 1h
+    dq printf.case_d            ; 2h
+
+; jmp table for %o, %s, %x
+; ascii codes are 111d, 115d, 120d
+; sub 111d = 0h, 4h, 9h
 
 jmp_osx_table:
-    dq printf.case_o
-    dq 3h dup (printf.skip)
-    dq printf.case_s
-    dq 4h dup (printf.skip)
-    dq printf.case_x
+    dq printf.case_o            ; 0h
+    dq 3h dup (printf.next)     ; 1h-3h
+    dq printf.case_s            ; 4h
+    dq 4h dup (printf.next)     ; 5h-8h
+    dq printf.case_x            ; 9h
     
 section '.bss' writeable
 
