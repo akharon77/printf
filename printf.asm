@@ -5,7 +5,6 @@ section '.text' executable
 public _start
 
 _start:
-
     mov rax, 3Ch
     xor rdi, rdi
     syscall
@@ -32,14 +31,14 @@ printf:
     inc rsi             
     jmp .next
 
-.format:                    ; |beg|   |   |   |RSI| => RSI - beg + 1 = RCX => beg = RSI - RCX + 1
+.format:                    ; |beg|...|...|...|RSI| => RSI - beg + 1 = RCX => beg = RSI - RCX + 1
     inc rsi
     mov rax, rsi
     sub rax, rcx
     
     push rax
     push rcx
-    call nputs              ; (ptr = rax, len = rcx)
+    call nputs              ; nputs(ptr = rax, len = rcx)
 
     mov al, [rsi]
 
@@ -55,7 +54,9 @@ printf:
     jmp .next
 
 .case_percent:
-    ; putc('%')
+    push percent
+    push 1
+    call nputs
     jmp .next
 
 .case_bcd:
@@ -64,6 +65,10 @@ printf:
 
 ;==========================================
     .case_b:
+        push rsp
+        sub rsp, 40h
+        call convertBinary
+        add rsp, 40h
         
         jmp .next
 
@@ -163,8 +168,10 @@ nputs:
 
 section '.data' writeable
 
-bufferIndex  dq 0h
 formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
+
+bufferIndex  dq 0h
+percent      db '%'
 
 align 8
 
