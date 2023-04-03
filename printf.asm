@@ -5,6 +5,13 @@ section '.text' executable
 public _start
 
 _start:
+    push 42d
+    push 'a'
+    push 101010b
+    push msg1
+    call printf
+    add rsp, 10h
+
     mov rax, 3Ch
     xor rdi, rdi
     syscall
@@ -16,8 +23,8 @@ printf:
     push rbp
     mov rbp, rsp
 
-    mov r8, -1h             ; R8 is used to accumulate the count of arguments
-    mov rsi, [rbp]          ; RSI is used for format string address
+    mov r8, 0h              ; R8 is used to accumulate the count of arguments
+    mov rsi, [rbp + 10h]    ; RSI is used for format string address
     mov r9, 0h              ; R9 is used for buffer index
     xor rcx, rcx            ; RCS is used to accumulate the part of string to print without formatting
     xor rax, rax            ; RAX is used for symbol loading
@@ -36,23 +43,23 @@ printf:
     jmp .next
 
 .format:                    ; |beg|...|...|...|RSI| => RSI - beg + 1 = RCX => beg = RSI - RCX + 1
-    inc rsi
-
-    push rax
-
     mov rax, rsi
     sub rax, rcx
+
+    inc rsi
     
     push rsi
-    push rcx
 
     push rax
     push rcx
     call nputs              ; nputs(ptr = rax, len = rcx)
+    add rsp, 10h
 
-    pop rcx
+    xor rcx, rcx
     pop rsi
-    pop rax
+
+    mov al, [rsi]
+    inc rsi
 
 ;=============== BIN SEARCH ===============
     cmp al, 'd'
@@ -85,39 +92,72 @@ printf:
 
 .case_bcd:
     inc r8
+    and rax, 0FFh
     sub rax, 'b'
     jmp qword [jmp_bcd_table + rax * 8h]
 
 ;==========================================
     .case_b:
-        push rsp
         sub rsp, 40h
-        push qword [18h + rbp + r8 * 8h]
+        
+        mov rbx, rsp
+        add rbx, 40h - 1h
+
+        push rbx
+        push qword [10h + rbp + r8 * 8h]
 
         call convertBinary
+        add rsp, 10h
+
+        mov rbx, rsp
+        add rbx, 40h
+        sub rbx, rax
+        push rbx
+        push rax
+        call nputs
+        add rsp, 10h
+        
         add rsp, 40h
         
         jmp .next
 
     .case_c:
-        inc r8
         cmp r9, BUFFER_SIZE
         jb @f
             call flush
     @@:
-        mov rax, [18h + rbp + r8 * 8h]
+        mov rax, [10h + rbp + r8 * 8h]
         mov [printBuffer + r9], al
         inc r9
 
         jmp .next
 
     .case_d:
+        sub rsp, 40h
+        mov rbx, rsp
+        add rbx, 40h - 1h
+        push rbx
+        push qword [10h + rbp + r8 * 8h]
+
+        call convertDecimal
+        add rsp, 10h
+
+        mov rbx, rsp
+        add rbx, 40h
+        sub rbx, rax
+        push rbx
+        push rax
+        call nputs
+        add rsp, 10h
+
+        add rsp, 40h
         
         jmp .next
 ;==========================================
 
 .case_osx:
     inc r8
+    and rax, 0FFh
     sub rax, 'o'
     jmp qword [jmp_osx_table + rax * 8h]
 
@@ -136,7 +176,7 @@ printf:
 ;==========================================
 
 .end:
-    ; call flush
+    call flush
 
     mov rsp, rbp
     pop rbp
@@ -169,6 +209,8 @@ nputs:
     push rbp
     mov rbp, rsp
 
+    push rsi
+
     cmp qword [rbp + 10h], BUFFER_SIZE
     jae .over_buf
 
@@ -200,6 +242,8 @@ nputs:
     jmp .end
 
 .end:
+    pop rsi
+
     mov rsp, rbp
     pop rbp
     ret
@@ -219,7 +263,6 @@ convertBinary:
 
     mov rdi, [rbp + 18h]
     mov rbx, [rbp + 10h]
-    mov rcx, 40h
     std
 
 .next:
@@ -229,7 +272,11 @@ convertBinary:
     and al, 1h
     add al, '0'
     stosb
-    loop .next
+    cmp rbx, 0h
+    jne .next
+
+    mov rax, [rbp + 18h]
+    sub rax, rdi
 
     mov rsp, rbp
     pop rbp
@@ -249,18 +296,36 @@ convertDecimal:
     mov rbp, rsp
 
     mov rdi, [rbp + 18h]
-    mov rbx, [rbp + 10h]
-    mov rcx, 40h
-    std
+    mov rax, [rbp + 10h]
+    push rax
+
+    cmp rax, 0h
+    jae @f
+        mov rbx, -1h
+        imul rbx
+@@:
+    mov rbx, 0Ah
 
 .next:
-    shr rbx, 1h
-    lahf
-    mov al, ah
-    and al, 1h
-    add al, '0'
-    stosb
-    loop .next
+    xor rdx, rdx
+    div rbx
+    
+    mov cl, [numBase + rdx]
+    mov [rdi], cl
+    dec rdi
+
+    cmp rax, 0h
+    jne .next
+
+    pop rax
+    cmp rax, 0h
+    jae @f
+        mov byte [rdi], '-'
+        dec rdi
+@@:
+
+    mov rax, [rbp + 18h]
+    sub rax, rdi
 
     mov rsp, rbp
     pop rbp
@@ -268,6 +333,8 @@ convertDecimal:
 ;==========================================
 
 section '.data' writeable
+
+msg1 db "%b lolo%c %d", 0Ah, 0h
 
 formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
 
