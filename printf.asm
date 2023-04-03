@@ -5,12 +5,7 @@ section '.text' executable
 public _start
 
 _start:
-    push 10001b
-    push 0DEADh
-    push 77o
-    push 42d
-    push msg1
-    push '!'
+    push -42d
     push formatString
     call printf
     add rsp, 7h * 8h
@@ -321,12 +316,16 @@ convertDecimal:
     mov rdi, [rbp + 18h]
     mov rax, [rbp + 10h]
     mov rcx, SUB_BUFFER_SIZE
-    push rax
 
-    cmp rax, 0h
-    jae @f
-        mov rbx, -1h
-        imul rbx
+    push rax
+    shl rax, 1h
+    jnc .pos
+        not rax
+        shr rax, 1h
+        add rax, 1h
+        jmp @f
+.pos:
+    shr rax, 1h
 @@:
     mov rbx, 0Ah
 
@@ -347,8 +346,8 @@ convertDecimal:
 
 .end:
     pop rax
-    cmp rax, 0h
-    jae @f
+    shl rax, 1h
+    jnc @f
         mov byte [rdi], '-'
         dec rdi
 @@:
@@ -444,7 +443,7 @@ convertHexadecimal:
 
 section '.data' writeable
 
-formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b", 0Ah, 0h
+formatString db "%d", 0Ah, 0h
 msg1         db "LOL", 0h
 
 numBase      db "0123456789ABCDEF"
