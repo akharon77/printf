@@ -18,14 +18,17 @@ printf:
 
     mov r8, -1h             ; R8 is used to accumulate the count of arguments
     mov rsi, [rbp]          ; RSI is used for format string address
+    mov r9, 0h              ; R9 is used for buffer index
     xor rcx, rcx            ; RCS is used to accumulate the part of string to print without formatting
     xor rax, rax            ; RAX is used for symbol loading
     
 .next:
-    cmp byte [rsi], '%'
+    mov al, [rsi]
+
+    cmp al, '%'
     je .format
 
-    cmp byte [rsi], 0h
+    cmp al, 0h
     je .end
                             ;   If not EOS (end-of-string for future) and not format beginning
     inc rcx                 ; increase the length of string's part
@@ -34,6 +37,9 @@ printf:
 
 .format:                    ; |beg|...|...|...|RSI| => RSI - beg + 1 = RCX => beg = RSI - RCX + 1
     inc rsi
+
+    push rax
+
     mov rax, rsi
     sub rax, rcx
     
@@ -46,8 +52,7 @@ printf:
 
     pop rcx
     pop rsi
-
-    mov al, [rsi]
+    pop rax
 
 ;=============== BIN SEARCH ===============
     cmp al, 'd'
@@ -69,13 +74,12 @@ printf:
 
 .case_percent:
     inc r8
-    cmp [bufferIndex], BUFFER_SIZE
-    jb .no_flush
+    cmp r9, BUFFER_SIZE
+    jb @f
         call flush
-.no_flush:
-    mov rdi, [bufferIndex]
-    mov [printBuffer + rdi], '%'
-    inc [bufferIndex]
+@@:
+    mov [printBuffer + r9], '%'
+    inc r9 
 
     jmp .next
 
@@ -86,9 +90,9 @@ printf:
 
 ;==========================================
     .case_b:
-        sub rsp, 40h
         push rsp
-        push [18h + rbp + r8 * 8h]
+        sub rsp, 40h
+        push qword [18h + rbp + r8 * 8h]
 
         call convertBinary
         add rsp, 40h
@@ -96,6 +100,14 @@ printf:
         jmp .next
 
     .case_c:
+        inc r8
+        cmp r9, BUFFER_SIZE
+        jb @f
+            call flush
+    @@:
+        mov rax, [18h + rbp + r8 * 8h]
+        mov [printBuffer + r9], al
+        inc r9
 
         jmp .next
 
@@ -115,7 +127,7 @@ printf:
         jmp .next
 
     .case_s:
-        push 
+
         jmp .next
 
     .case_x:
@@ -132,6 +144,9 @@ printf:
 ;==========================================
 
 ;==========================================
+; ASSUME:
+;   R9 = buffer index
+;==========================================
 ; DESTROY:
 ;   RAX, RDX, RSI, RDI
 ;==========================================
@@ -139,10 +154,10 @@ flush:
     mov rax, 1h             ; syscall write
     mov rdi, 1h             ; fd    = 1h (console output)
     mov rsi, printBuffer    ; buf   = offset printBuffer
-    mov rdx, [bufferIndex]  ; count = bufferIndex
+    mov rdx, r9             ; count = bufferIndex
     syscall
 
-    mov [bufferIndex], 0h
+    mov r9, 0h
     ret
 ;==========================================
 
@@ -158,7 +173,7 @@ nputs:
     jae .over_buf
 
     mov rcx, BUFFER_SIZE
-    sub rcx, [bufferIndex]
+    sub rcx, r9
 
     cmp [rbp + 10h], rcx
     jbe .no_flush
@@ -167,10 +182,10 @@ nputs:
 .no_flush:
     cld
     mov rsi, [rbp + 18h]
-    mov rdi, [bufferIndex]
+    mov rdi, r9
     add rdi, printBuffer
     mov rcx, [rbp + 10h]
-    add [bufferIndex], rcx
+    add r9, rcx
     rep movsb
 
     jmp .end
@@ -191,13 +206,61 @@ nputs:
 ;==========================================
 
 ;==========================================
-; [rbp + 1
+; ASSUME:
+;   num     = [rbp + 10h]
+;   ptr_end = [rbp + 18h]
+;==========================================
+; DESTROY:
+;   RAX, RBX, RCX, RDI
 ;==========================================
 convertBinary:
     push rbp
     mov rbp, rsp
 
-    
+    mov rdi, [rbp + 18h]
+    mov rbx, [rbp + 10h]
+    mov rcx, 40h
+    std
+
+.next:
+    shr rbx, 1h
+    lahf
+    mov al, ah
+    and al, 1h
+    add al, '0'
+    stosb
+    loop .next
+
+    mov rsp, rbp
+    pop rbp
+    ret
+;==========================================
+
+;==========================================
+; ASSUME:
+;   num     = [rbp + 10h]
+;   ptr_end = [rbp + 18h]
+;==========================================
+; DESTROY:
+;   RAX, RBX, RCX, RDI
+;==========================================
+convertDecimal:
+    push rbp
+    mov rbp, rsp
+
+    mov rdi, [rbp + 18h]
+    mov rbx, [rbp + 10h]
+    mov rcx, 40h
+    std
+
+.next:
+    shr rbx, 1h
+    lahf
+    mov al, ah
+    and al, 1h
+    add al, '0'
+    stosb
+    loop .next
 
     mov rsp, rbp
     pop rbp
@@ -208,7 +271,7 @@ section '.data' writeable
 
 formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
 
-bufferIndex  dq 0h
+numBase      db "0123456789ABCDEF"
 
 align 8
 
