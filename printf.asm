@@ -16,6 +16,7 @@ printf:
     push rbp
     mov rbp, rsp
 
+    mov r8, -1h             ; R8 is used to accumulate the count of arguments
     mov rsi, [rbp]          ; RSI is used for format string address
     xor rcx, rcx            ; RCS is used to accumulate the part of string to print without formatting
     xor rax, rax            ; RAX is used for symbol loading
@@ -36,37 +37,59 @@ printf:
     mov rax, rsi
     sub rax, rcx
     
+    push rsi
+    push rcx
+
     push rax
     push rcx
     call nputs              ; nputs(ptr = rax, len = rcx)
 
+    pop rcx
+    pop rsi
+
     mov al, [rsi]
 
+;=============== BIN SEARCH ===============
+    cmp al, 'd'
+    ja .case_above_d
+    jmp .case_below_equal_d
+
+.case_above_d:
     cmp al, 'o'
-    jge .case_osx
-
-    cmp al, 'b'
-    jge .case_bcd
-
-    cmp al, '%'
-    je .case_percent
-    
+    jae .case_osx
     jmp .next
 
+.case_below_equal_d:
+    cmp al, 'b'
+    jae .case_bcd
+    cmp al, '%'
+    je .case_percent
+    jmp .next
+;==========================================
+
 .case_percent:
-    push percent
-    push 1
-    call nputs
+    inc r8
+    cmp [bufferIndex], BUFFER_SIZE
+    jb .no_flush
+        call flush
+.no_flush:
+    mov rdi, [bufferIndex]
+    mov [printBuffer + rdi], '%'
+    inc [bufferIndex]
+
     jmp .next
 
 .case_bcd:
+    inc r8
     sub rax, 'b'
     jmp qword [jmp_bcd_table + rax * 8h]
 
 ;==========================================
     .case_b:
-        push rsp
         sub rsp, 40h
+        push rsp
+        push [18h + rbp + r8 * 8h]
+
         call convertBinary
         add rsp, 40h
         
@@ -82,6 +105,7 @@ printf:
 ;==========================================
 
 .case_osx:
+    inc r8
     sub rax, 'o'
     jmp qword [jmp_osx_table + rax * 8h]
 
@@ -91,7 +115,7 @@ printf:
         jmp .next
 
     .case_s:
-
+        push 
         jmp .next
 
     .case_x:
@@ -166,12 +190,25 @@ nputs:
     ret
 ;==========================================
 
+;==========================================
+; [rbp + 1
+;==========================================
+convertBinary:
+    push rbp
+    mov rbp, rsp
+
+    
+
+    mov rsp, rbp
+    pop rbp
+    ret
+;==========================================
+
 section '.data' writeable
 
 formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
 
 bufferIndex  dq 0h
-percent      db '%'
 
 align 8
 
