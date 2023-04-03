@@ -68,14 +68,26 @@ printf:
 
 .case_above_d:
     cmp al, 'o'
-    jae .case_osx
+    jae .case_above_o
+
+    inc rcx
+    jmp .next
+
+.case_above_o:
+    cmp al, 'x'
+    jbe .case_osx
+    
+    inc rcx
     jmp .next
 
 .case_below_equal_d:
     cmp al, 'b'
     jae .case_bcd
+
     cmp al, '%'
     je .case_percent
+
+    inc rcx
     jmp .next
 ;==========================================
 
@@ -334,7 +346,7 @@ convertDecimal:
 
 section '.data' writeable
 
-msg1 db "%b lolo%c %d", 0Ah, 0h
+msg1 db "%z %b lolo%c %d", 0Ah, 0h
 
 formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
 
