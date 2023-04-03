@@ -5,16 +5,48 @@ section '.text' executable
 public _start
 
 _start:
-    push msg2
+    push 10001b
+    push 0DEADh
+    push 77o
+    push 42d
     push msg1
+    push '!'
+    push formatString
     call printf
-    add rsp, 10h
+    add rsp, 7h * 8h
 
     mov rax, 3Ch
     xor rdi, rdi
     syscall
 
-BUFFER_SIZE equ 100h
+BUFFER_SIZE     equ 100h
+SUB_BUFFER_SIZE equ 40h
+
+macro convertWrapper func
+{
+    sub rsp, SUB_BUFFER_SIZE
+    
+    mov rbx, rsp
+    add rbx, SUB_BUFFER_SIZE - 1h
+
+    push rcx
+    push rbx
+    push qword [10h + rbp + r8 * 8h]
+
+    call func
+    add rsp, 10h
+    pop rcx
+
+    mov rbx, rsp
+    add rbx, SUB_BUFFER_SIZE
+    sub rbx, rax
+    push rbx
+    push rax
+    call nputs
+    add rsp, 10h
+    
+    add rsp, SUB_BUFFER_SIZE
+}
 
 ;==========================================
 printf:
@@ -90,7 +122,6 @@ printf:
 ;==========================================
 
 .case_percent:
-    inc r8
     cmp r9, BUFFER_SIZE
     jb @f
         call flush
@@ -108,27 +139,7 @@ printf:
 
 ;==========================================
     .case_b:
-        sub rsp, 40h
-        
-        mov rbx, rsp
-        add rbx, 40h - 1h
-
-        push rbx
-        push qword [10h + rbp + r8 * 8h]
-
-        call convertBinary
-        add rsp, 10h
-
-        mov rbx, rsp
-        add rbx, 40h
-        sub rbx, rax
-        push rbx
-        push rax
-        call nputs
-        add rsp, 10h
-        
-        add rsp, 40h
-        
+        convertWrapper convertBinary 
         jmp .next
 
     .case_c:
@@ -143,25 +154,7 @@ printf:
         jmp .next
 
     .case_d:
-        sub rsp, 40h
-        mov rbx, rsp
-        add rbx, 40h - 1h
-        push rbx
-        push qword [10h + rbp + r8 * 8h]
-
-        call convertDecimal
-        add rsp, 10h
-
-        mov rbx, rsp
-        add rbx, 40h
-        sub rbx, rax
-        push rbx
-        push rax
-        call nputs
-        add rsp, 10h
-
-        add rsp, 40h
-        
+        convertWrapper convertDecimal 
         jmp .next
 ;==========================================
 
@@ -173,7 +166,7 @@ printf:
 
 ;==========================================
     .case_o:
-
+        convertWrapper convertOctal
         jmp .next
 
     .case_s:
@@ -194,7 +187,7 @@ printf:
         jmp .next
 
     .case_x:
-
+        convertWrapper convertHexadecimal
         jmp .next
 ;==========================================
 
@@ -286,6 +279,7 @@ convertBinary:
 
     mov rdi, [rbp + 18h]
     mov rbx, [rbp + 10h]
+    mov rcx, SUB_BUFFER_SIZE
     std
 
 .next:
@@ -295,9 +289,15 @@ convertBinary:
     and al, 1h
     add al, '0'
     stosb
+
+    dec rcx
+    cmp rcx, 0h
+    je .end
+
     cmp rbx, 0h
     jne .next
 
+.end:
     mov rax, [rbp + 18h]
     sub rax, rdi
 
@@ -320,6 +320,7 @@ convertDecimal:
 
     mov rdi, [rbp + 18h]
     mov rax, [rbp + 10h]
+    mov rcx, SUB_BUFFER_SIZE
     push rax
 
     cmp rax, 0h
@@ -337,16 +338,20 @@ convertDecimal:
     mov [rdi], cl
     dec rdi
 
+    dec rcx
+    cmp rcx, 0h
+    je .end
+
     cmp rax, 0h
     jne .next
 
+.end:
     pop rax
     cmp rax, 0h
     jae @f
         mov byte [rdi], '-'
         dec rdi
 @@:
-
     mov rax, [rbp + 18h]
     sub rax, rdi
 
@@ -356,16 +361,91 @@ convertDecimal:
 ;==========================================
 
 ;==========================================
-strlen:
+; ASSUME:
+;   num     = [rbp + 10h]
+;   ptr_end = [rbp + 18h]
+;==========================================
+; DESTROY:
+;   RAX, RBX, RCX, RDI
+;==========================================
+convertOctal:
+    push rbp
+    mov rbp, rsp
+
+    mov rdi, [rbp + 18h]
+    mov rax, [rbp + 10h]
+    mov rcx, SUB_BUFFER_SIZE
+
+.next:
+    mov rdx, rax
+    and rdx, 7h
+    shr rax, 3h
     
+    mov cl, [numBase + rdx]
+    mov [rdi], cl
+    dec rdi
+
+    dec rcx
+    cmp rcx, 0h
+    je .end
+
+    cmp rax, 0h
+    jne .next
+
+.end:
+    mov rax, [rbp + 18h]
+    sub rax, rdi
+
+    mov rsp, rbp
+    pop rbp
+    ret
+;==========================================
+
+;==========================================
+; ASSUME:
+;   num     = [rbp + 10h]
+;   ptr_end = [rbp + 18h]
+;==========================================
+; DESTROY:
+;   RAX, RBX, RCX, RDI
+;==========================================
+convertHexadecimal:
+    push rbp
+    mov rbp, rsp
+
+    mov rdi, [rbp + 18h]
+    mov rax, [rbp + 10h]
+    mov rcx, SUB_BUFFER_SIZE
+
+.next:
+    mov rdx, rax
+    and rdx, 0Fh
+    shr rax, 4h
+    
+    mov cl, [numBase + rdx]
+    mov [rdi], cl
+    dec rdi
+
+    dec rcx
+    cmp rcx, 0h
+    je .end
+
+    cmp rax, 0h
+    jne .next
+
+.end:
+    mov rax, [rbp + 18h]
+    sub rax, rdi
+
+    mov rsp, rbp
+    pop rbp
+    ret
 ;==========================================
 
 section '.data' writeable
 
-msg1 db "%s", 0Ah, 0h
-msg2 db "Hello", 0h
-
-formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
+formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b", 0Ah, 0h
+msg1         db "LOL", 0h
 
 numBase      db "0123456789ABCDEF"
 
