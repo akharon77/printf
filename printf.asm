@@ -5,9 +5,7 @@ section '.text' executable
 public _start
 
 _start:
-    push 42d
-    push 'a'
-    push 101010b
+    push msg2
     push msg1
     call printf
     add rsp, 10h
@@ -179,6 +177,19 @@ printf:
         jmp .next
 
     .case_s:
+        mov rdi, [10h + rbp + r8 * 8h]
+        mov rbx, rdi
+        push rdi
+
+        cld
+        mov al, 0h
+        mov rcx, BUFFER_SIZE * 2h
+        repne scasb
+        sub rdi, rbx
+        push rdi
+        
+        call nputs
+        add rsp, 10h
 
         jmp .next
 
@@ -344,9 +355,15 @@ convertDecimal:
     ret
 ;==========================================
 
+;==========================================
+strlen:
+    
+;==========================================
+
 section '.data' writeable
 
-msg1 db "%z %b lolo%c %d", 0Ah, 0h
+msg1 db "%s", 0Ah, 0h
+msg2 db "Hello", 0h
 
 formatString db "%%c: %c, %%s: %s, %%d: %d, %%o: %o, %%x: %x, %%b: %b, %%", 0h
 
