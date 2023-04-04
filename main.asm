@@ -2,10 +2,13 @@ format ELF64
 
 section '.text' executable
 
-public _start
 extrn printf
+public main
 
-_start:
+main:
+    push rbp
+    mov rbp, rsp
+
     mov rdi, str1
     mov rsi, -1h
     mov rdx, msg1
@@ -14,24 +17,23 @@ _start:
     mov r9, 33d
 
     mov [rspBuf], rsp
-    and rsp, -16
-
-    xor rax, rax
+    and rsp, not 0Fh
 
     push msg1
-    push 127d
+
+    xor rax, rax
 
     call printf
 
     mov rsp, [rspBuf]
     
-    mov rax, 3Ch
-    xor rdi, rdi
-    syscall
+    mov rsp, rbp
+    pop rbp
+    ret
 
 section '.data' writeable
 
-str1 db "%d %s %x %d%%%c%b hehehe %s", 0Ah, 0h
+str1 db "%d %s %x %d%%%c hehehe %s", 0Ah, 0h
 msg1 db "Love", 0h
 
 rspBuf dq 0h

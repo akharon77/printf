@@ -4,7 +4,7 @@ asmFromC: mainC.o printf.o
 	gcc -o asmFromC printf.o mainC.o -no-pie
 
 cFromAsm: mainAsm.o
-	ld mainAsm.o -o cFromAsm /lib/x86_64-linux-gnu/libc.so --dynamic-linker /lib64/ld-linux-x86-64.so.2
+	gcc -o cFromAsm mainAsm.o -no-pie
 
 mainAsm.o: main.asm
 	fasm main.asm mainAsm.o
