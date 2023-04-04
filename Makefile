@@ -1,10 +1,10 @@
-all: asmFromC cFromAsm
+all: asmFromC.out cFromAsm.out
 
-asmFromC: mainC.o printf.o
-	gcc -o asmFromC printf.o mainC.o -no-pie
+asmFromC.out: mainC.o printf.o
+	gcc -o asmFromC.out printf.o mainC.o -no-pie
 
-cFromAsm: mainAsm.o
-	gcc -o cFromAsm mainAsm.o -no-pie
+cFromAsm.out: mainAsm.o
+	gcc -o cFromAsm.out mainAsm.o -no-pie
 
 mainAsm.o: main.asm
 	fasm main.asm mainAsm.o
