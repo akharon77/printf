@@ -2,24 +2,26 @@ format ELF64
 
 section '.text' executable
 
-public _start
+; public _start
 
-_start:
-    push 127d
-    push 33d
-    push 100d
-    push 3802d
-    push msg1
-    push -1d
-    push str1
-    ; push 10101b
-    ;push str1
-    call printf
-    add rsp, 7h * 8h
+public printfWrapper
 
-    mov rax, 3Ch
-    xor rdi, rdi
-    syscall
+; _start:
+;     push 127d
+;     push 33d
+;     push 100d
+;     push 3802d
+;     push msg1
+;     push -1d
+;     push str1
+;     ; push 10101b
+;     ;push str1
+;     call printf
+;     add rsp, 7h * 8h
+; 
+;     mov rax, 3Ch
+;     xor rdi, rdi
+;     syscall
 
 BUFFER_SIZE     equ 100h
 SUB_BUFFER_SIZE equ 40h
@@ -49,6 +51,25 @@ macro convertWrapper func
     
     add rsp, SUB_BUFFER_SIZE
 }
+
+;==========================================
+printfWrapper:
+    pop r12
+    
+    push r9
+    push r8
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+
+    call printf
+    add rsp, 6h * 8h
+    
+    push r12
+
+    ret
+;==========================================
 
 ;==========================================
 printf:
@@ -458,7 +479,7 @@ convertHexadecimal:
     ret
 ;==========================================
 
-section '.data' writeable
+section '.data' writeable align 8
 
 ; str1 db "%b hehehe", 0Ah, 0h
 str1 db "%d %s %x %d%%%c%b hehehe", 0Ah, 0h
