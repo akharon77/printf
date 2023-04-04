@@ -5,8 +5,15 @@ section '.text' executable
 public _start
 
 _start:
-    push -42d
-    push formatString
+    push 127d
+    push 33d
+    push 100d
+    push 3802d
+    push msg1
+    push -1d
+    push str1
+    ; push 10101b
+    ;push str1
     call printf
     add rsp, 7h * 8h
 
@@ -187,6 +194,10 @@ printf:
 ;==========================================
 
 .end:
+    sub rsi, rcx
+    push rsi
+    push rcx
+    call nputs
     call flush
 
     mov rsp, rbp
@@ -202,11 +213,17 @@ printf:
 ;   RAX, RDX, RSI, RDI
 ;==========================================
 flush:
+    push rsi
+    push rcx
+
     mov rax, 1h             ; syscall write
     mov rdi, 1h             ; fd    = 1h (console output)
     mov rsi, printBuffer    ; buf   = offset printBuffer
     mov rdx, r9             ; count = bufferIndex
     syscall
+        
+    pop rcx
+    pop rsi
 
     mov r9, 0h
     ret
@@ -443,8 +460,9 @@ convertHexadecimal:
 
 section '.data' writeable
 
-formatString db "%d", 0Ah, 0h
-msg1         db "LOL", 0h
+; str1 db "%b hehehe", 0Ah, 0h
+str1 db "%d %s %x %d%%%c%b hehehe", 0Ah, 0h
+msg1 db "Love", 0h
 
 numBase      db "0123456789ABCDEF"
 
