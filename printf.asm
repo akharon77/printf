@@ -76,11 +76,18 @@ printf:
     push rbp
     mov rbp, rsp
 
+    push rbx
+
     mov r8, 0h              ; R8 is used to accumulate the count of arguments
     mov rsi, [rbp + 10h]    ; RSI is used for format string address
     mov r9, 0h              ; R9 is used for buffer index
     xor rcx, rcx            ; RCS is used to accumulate the part of string to print without formatting
     xor rax, rax            ; RAX is used for symbol loading
+
+    jmp .next
+
+.next_inc:
+    add rcx, 1h
     
 .next:
     mov al, [rsi]
@@ -123,15 +130,13 @@ printf:
     cmp al, 'o'
     jae .case_above_o
 
-    inc rcx
-    jmp .next
+    jmp .next_inc
 
 .case_above_o:
     cmp al, 'x'
     jbe .case_osx
     
-    inc rcx
-    jmp .next
+    jmp .next_inc
 
 .case_below_equal_d:
     cmp al, 'b'
@@ -140,8 +145,7 @@ printf:
     cmp al, '%'
     je .case_percent
 
-    inc rcx
-    jmp .next
+    jmp .next_inc
 ;==========================================
 
 .case_percent:
@@ -155,17 +159,20 @@ printf:
     jmp .next
 
 .case_bcd:
-    inc r8
     and rax, 0FFh
-    sub rax, 'b'
-    jmp qword [jmp_bcd_table + rax * 8h]
+    ; sub rax, 'b'
+    jmp qword [jmp_bcd_table + (rax - 'b') * 8h]
 
 ;==========================================
     .case_b:
+        inc r8
+
         convertWrapper convertBinary 
         jmp .next
 
     .case_c:
+        inc r8
+
         cmp r9, BUFFER_SIZE
         jb @f
             call flush
@@ -177,22 +184,27 @@ printf:
         jmp .next
 
     .case_d:
+        inc r8
+
         convertWrapper convertDecimal 
         jmp .next
 ;==========================================
 
 .case_osx:
-    inc r8
     and rax, 0FFh
-    sub rax, 'o'
-    jmp qword [jmp_osx_table + rax * 8h]
+    ; sub rax, 'o'
+    jmp qword [jmp_osx_table + (rax - 'o') * 8h]
 
 ;==========================================
     .case_o:
+        inc r8
+
         convertWrapper convertOctal
         jmp .next
 
     .case_s:
+        inc r8
+
         mov rdi, [10h + rbp + r8 * 8h]
         mov rbx, rdi
         push rdi
@@ -210,6 +222,8 @@ printf:
         jmp .next
 
     .case_x:
+        inc r8
+
         convertWrapper convertHexadecimal
         jmp .next
 ;==========================================
@@ -220,6 +234,8 @@ printf:
     push rcx
     call nputs
     call flush
+
+    pop rbx
 
     mov rsp, rbp
     pop rbp
@@ -250,6 +266,9 @@ flush:
     ret
 ;==========================================
 
+;==========================================
+; 
+; 
 ;==========================================
 ; len = qword [rbp + 10h]
 ; ptr = qword [rbp + 18h]
@@ -508,9 +527,9 @@ jmp_bcd_table:
 
 jmp_osx_table:
     dq printf.case_o            ; == 0h ==
-    dq 3h dup (printf.next)     ; 1h-3h
+    dq 3h dup (printf.next_inc) ; 1h-3h
     dq printf.case_s            ; == 4h ==
-    dq 4h dup (printf.next)     ; 5h-8h
+    dq 4h dup (printf.next_inc) ; 5h-8h
     dq printf.case_x            ; == 9h ==
     
 section '.bss' writeable
